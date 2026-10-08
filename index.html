@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🎲 3D 탐구 주사위</title>
-  <!-- Three.js 및 마우스 궤도 컨트롤 라이브러리 CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- 안정적인 CDN 스크립트 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r124/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.124.0/examples/js/controls/OrbitControls.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -19,13 +19,17 @@
       overflow: hidden;
       font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       color: #fff;
-    }
-    #canvas-container {
       width: 100vw;
       height: 100vh;
-      display: block;
     }
-    /* 상단 안내 패널 */
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
     .header-panel {
       position: absolute;
       top: 20px;
@@ -39,6 +43,7 @@
       text-align: center;
       box-shadow: 0 10px 30px rgba(0,0,0,0.3);
       pointer-events: none;
+      z-index: 10;
     }
     .header-panel h1 {
       font-size: 1.5rem;
@@ -50,7 +55,6 @@
       font-size: 0.95rem;
       color: #cbd5e1;
     }
-    /* 하단 조작 안내 및 정답 확인 버튼 */
     .bottom-panel {
       position: absolute;
       bottom: 30px;
@@ -60,11 +64,12 @@
       flex-direction: column;
       align-items: center;
       gap: 12px;
+      z-index: 10;
     }
     .instruction {
       font-size: 0.9rem;
       color: #94a3b8;
-      background: rgba(15, 23, 42, 0.6);
+      background: rgba(15, 23, 42, 0.7);
       padding: 6px 16px;
       border-radius: 20px;
     }
@@ -72,8 +77,8 @@
       background: linear-gradient(135deg, #3b82f6, #2563eb);
       color: white;
       border: none;
-      padding: 12px 28px;
-      font-size: 1.05rem;
+      padding: 12px 24px;
+      font-size: 1rem;
       font-weight: 700;
       border-radius: 30px;
       cursor: pointer;
@@ -84,7 +89,6 @@
       transform: translateY(-2px);
       box-shadow: 0 10px 25px rgba(37, 99, 235, 0.6);
     }
-    /* 정답 모달창 */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -98,27 +102,22 @@
     .modal-content {
       background: #ffffff;
       color: #1e293b;
-      padding: 30px;
+      padding: 28px;
       border-radius: 24px;
-      max-width: 480px;
+      max-width: 440px;
       width: 90%;
       box-shadow: 0 20px 40px rgba(0,0,0,0.5);
-      animation: popIn 0.3s ease-out;
-    }
-    @keyframes popIn {
-      from { opacity: 0; transform: scale(0.9); }
-      to { opacity: 1; transform: scale(1); }
     }
     .modal-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       border-bottom: 2px solid #f1f5f9;
       padding-bottom: 12px;
     }
     .modal-header h2 {
-      font-size: 1.4rem;
+      font-size: 1.3rem;
       color: #0f172a;
     }
     .btn-close {
@@ -131,9 +130,8 @@
     .modal-body {
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      line-height: 1.6;
-      font-size: 1rem;
+      gap: 8px;
+      font-size: 0.95rem;
     }
     .rule-item {
       background: #f8fafc;
@@ -153,44 +151,4 @@
   </div>
 
   <div class="bottom-panel">
-    <div class="instruction">화면을 드래그하여 주사위를 자유롭게 회전시켜 보세요</div>
-    <div style="display: flex; gap: 10px;">
-      <button class="btn-action" onclick="openModal()">🔍 4번 면(가려진 면) 정답 확인</button>
-      <button class="btn-action" style="background: linear-gradient(135deg, #10b981, #059669);" onclick="location.reload()">🔄 새로운 문제 뽑기</button>
-    </div>
-  </div>
-
-  <!-- 정답 모달 -->
-  <div class="modal-overlay" id="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>🎉 숨겨진 규칙 & 4번 면 정답</h2>
-        <button class="btn-close" onclick="closeModal()">&times;</button>
-      </div>
-      <div class="modal-body" id="modal-body">
-        <!-- 규칙 설명이 동적으로 들어옵니다 -->
-      </div>
-    </div>
-  </div>
-
-  <script>
-    // --- [1] 초등학생 눈높이에 맞춘 4개 모서리별 무작위 규칙 데이터 풀 ---
-    const topLeftRules = [
-      { getVal: (n) => n * 10, desc: '10씩 커짐 (10, 20, 30, 40...)' },
-      { getVal: (n) => n * 5, desc: '5씩 커짐 (5, 10, 15, 20...)' },
-      { getVal: (n) => Math.pow(2, n), desc: '앞 수의 2배씩 커짐 (2, 4, 8, 16...)' },
-      { getVal: (n) => n * 100, desc: '100씩 커짐 (100, 200, 300, 400...)' }
-    ];
-
-    const topRightRules = [
-      { getVal: (n) => ['자', '연', '보', '호', '실', '천'][n - 1], desc: "'자연보호실천' 글자 순서" },
-      { getVal: (n) => ['생', '태', '전', '환', '교', '육'][n - 1], desc: "'생태전환교육' 글자 순서" },
-      { getVal: (n) => ['봄', '여', '름', '가', '을', '겨'][n - 1], desc: "'봄여름가을겨(울)' 계절 순서" },
-      { getVal: (n) => (n % 2 === 1 ? 'A' : 'B'), desc: 'A와 B가 번갈아 반복됨' }
-    ];
-
-    const bottomLeftRules = [
-      { getVal: (n) => ['○', '△', '□', '⬠', '⬡', '★'][n - 1], desc: '변의 수가 늘어나는 도형 (원, 세모, 네모...)' },
-      { getVal: (n) => ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][n - 1], desc: '한글 자음 순서 (ㄱ, ㄴ, ㄷ, ㄹ...)' },
-      { getVal: (n) => ['ㄱ', 'ㅗ', 'ㅏ', 'ㅎ', 'ㅏ', 'ㄱ'][n - 1], desc: "'과학' 낱글자 풀기 (ㄱ, ㅗ, ㅏ, ㅎ...)" },
-      { getVal: (n) =>
+    <div class="
