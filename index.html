@@ -1,205 +1,74 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>단일 파일 계산기</title>
-    <style>
-        /* CSS: 스타일링 */
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
-            font-family: Arial, sans-serif;
-        }
-        .calculator {
-            background-color: #333;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
-        }
-        #display {
-            width: 100%;
-            height: 60px;
-            background-color: #eee;
-            border: none;
-            margin-bottom: 15px;
-            padding: 10px;
-            font-size: 2em;
-            text-align: right;
-            box-sizing: border-box;
-            border-radius: 5px;
-        }
-        .buttons {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-        }
-        .button {
-            width: 100%;
-            height: 60px;
-            font-size: 1.5em;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            background-color: #555;
-            color: white;
-        }
-        .button:hover {
-            background-color: #777;
-        }
-        .operator {
-            background-color: #ff9500;
-        }
-        .operator:hover {
-            background-color: #ffa520;
-        }
-        .clear {
-            background-color: #d9534f;
-        }
-        .clear:hover {
-            background-color: #e06c68;
-        }
-        .equals {
-            grid-column: span 2; /* = 버튼을 두 칸 차지하게 만듭니다. */
-            background-color: #4CAF50;
-        }
-        .equals:hover {
-            background-color: #62a365;
-        }
-    </style>
-</head>
-<body>
+// --- [1] 초등학생 눈높이에 맞춘 4개 모서리별 규칙 풀(Pool) 정의 ---
 
-    <div class="calculator">
-        <input type="text" id="display" disabled value="0">
+// 왼쪽 위 규칙 후보 (간단한 수열 규칙)
+const topLeftRules = [
+  { name: '10씩 커짐', getVal: (n) => n * 10, desc: '10씩 커지는 규칙' },
+  { name: '5씩 커짐', getVal: (n) => n * 5, desc: '5씩 커지는 규칙' },
+  { name: '2의 거듭제곱(2배씩)', getVal: (n) => Math.pow(2, n), desc: '앞 수의 2배씩 커지는 규칙' },
+  { name: '100씩 커짐', getVal: (n) => n * 100, desc: '100씩 커지는 규칙' }
+];
 
-        <div class="buttons">
-            <button class="button clear" onclick="clearDisplay()">AC</button>
-            <button class="button operator" onclick="appendOperation('/')">/</button>
-            <button class="button operator" onclick="appendOperation('*')">*</button>
-            
-            <button class="button" onclick="appendToDisplay('7')">7</button>
-            <button class="button" onclick="appendToDisplay('8')">8</button>
-            <button class="button" onclick="appendToDisplay('9')">9</button>
-            <button class="button operator" onclick="appendOperation('-')">-</button>
+// 오른쪽 위 규칙 후보 (단어 또는 알파벳 반복)
+const topRightRules = [
+  { name: '자연보호', getVal: (n) => ['자', '연', '보', '호', '실', '천'][n - 1], desc: "'자연보호실천' 글자 순서" },
+  { name: '사계절', getVal: (n) => ['봄', '여', '름', '가', '을', '겨'][n - 1], desc: "'봄여름가을겨(울)' 순서" },
+  { name: 'A-B 반복', getVal: (n) => (n % 2 === 1 ? 'A' : 'B'), desc: 'A와 B가 번갈아 나오는 규칙' },
+  { name: '무지개색', getVal: (n) => ['빨', '주', '노', '초', '파', '남'][n - 1], desc: '무지개 색깔 순서' }
+];
 
-            <button class="button" onclick="appendToDisplay('4')">4</button>
-            <button class="button" onclick="appendToDisplay('5')">5</button>
-            <button class="button" onclick="appendToDisplay('6')">6</button>
-            <button class="button operator" onclick="appendOperation('+')">+</button>
+// 왼쪽 아래 규칙 후보 (도형 및 한글 자음)
+const bottomLeftRules = [
+  { name: '기본 도형', getVal: (n) => ['○', '△', '□', '⬠', '⬡', '★'][n - 1], desc: '변의 수가 하나씩 늘어나는 도형' },
+  { name: '한글 자음순', getVal: (n) => ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][n - 1], desc: '한글 자음 순서 (ㄱ, ㄴ, ㄷ, ㄹ...)' },
+  { name: '화살표 회전', getVal: (n) => ['↑', '→', '↓', '←', '↑', '→'][n - 1], desc: '시계 방향으로 90도씩 회전하는 화살표' }
+];
 
-            <button class="button" onclick="appendToDisplay('1')">1</button>
-            <button class="button" onclick="appendToDisplay('2')">2</button>
-            <button class="button" onclick="appendToDisplay('3')">3</button>
-            <button class="button" onclick="calculateResult()">=</button>
+// 오른쪽 아래 규칙 후보 (간단한 구구단 및 배수)
+const bottomRightRules = [
+  { name: '2단', getVal: (n) => n * 2, desc: '2의 배수 (가운데 숫자의 2배)' },
+  { name: '3단', getVal: (n) => n * 3, desc: '3의 배수 (구구단 3단)' },
+  { name: '4단', getVal: (n) => n * 4, desc: '4의 배수 (구구단 4단)' },
+  { name: '9에서 빼기', getVal: (n) => 10 - n, desc: '합이 10이 되는 짝꿍수' }
+];
 
-            <button class="button" onclick="appendToDisplay('0')">0</button>
-            <button class="button" onclick="appendToDisplay('.')">.</button>
-        </div>
-    </div>
+// --- [2] 새로고침 시 무작위로 하나의 규칙 세트를 뽑아 주사위 면 데이터 생성 ---
 
-    <script>
-        // JavaScript: 계산 로직
-        const display = document.getElementById('display');
-        let currentInput = '0';
-        let operator = null;
-        let previousValue = null;
-        let waitingForNewValue = false;
+function generateRandomDice() {
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  
+  const tlRule = pick(topLeftRules);
+  const trRule = pick(topRightRules);
+  const blRule = pick(bottomLeftRules);
+  const brRule = pick(bottomRightRules);
 
-        function updateDisplay() {
-            display.value = currentInput;
-        }
+  // 물음표로 숨길 면 (기본 4번 면)
+  const hiddenFaceNum = 4;
 
-        // 숫자와 소수점 입력 함수
-        function appendToDisplay(value) {
-            if (currentInput === '0' || waitingForNewValue) {
-                currentInput = value === '.' ? '0.' : value;
-                waitingForNewValue = false;
-            } else if (value === '.' && currentInput.includes('.')) {
-                return; // 소수점 중복 방지
-            } else {
-                currentInput += value;
-            }
-            updateDisplay();
-        }
+  const faces = [];
+  for (let n = 1; n <= 6; n++) {
+    faces.push({
+      center: String(n),
+      tl: String(tlRule.getVal(n)),
+      tr: String(trRule.getVal(n)),
+      bl: String(blRule.getVal(n)),
+      br: String(brRule.getVal(n)),
+      isSecret: (n === hiddenFaceNum)
+    });
+  }
 
-        // 연산자 입력 함수
-        function appendOperation(nextOperator) {
-            const inputValue = parseFloat(currentInput);
+  // 퀴즈 정답 팝업에 들어갈 동적 설명문
+  const explanation = {
+    center: `${hiddenFaceNum} (주사위 번호 순서)`,
+    tl: `${tlRule.getVal(hiddenFaceNum)} (${tlRule.desc})`,
+    tr: `${trRule.getVal(hiddenFaceNum)} (${trRule.desc})`,
+    bl: `${blRule.getVal(hiddenFaceNum)} (${blRule.desc})`,
+    br: `${brRule.getVal(hiddenFaceNum)} (${brRule.desc})`
+  };
 
-            if (previousValue === null) {
-                previousValue = inputValue;
-            } else if (!waitingForNewValue) {
-                // 이전 계산이 완료되지 않았다면 결과를 먼저 계산합니다.
-                calculate();
-            }
+  return { faces, explanation };
+}
 
-            operator = nextOperator;
-            waitingForNewValue = true;
-            currentInput = previousValue.toString();
-            updateDisplay();
-        }
-
-        // 사칙연산 수행 로직 (계산 결과를 previousValue에 저장)
-        function calculate() {
-            const inputValue = parseFloat(currentInput);
-            if (previousValue === null || operator === null) return;
-
-            let result;
-            switch (operator) {
-                case '+':
-                    result = previousValue + inputValue;
-                    break;
-                case '-':
-                    result = previousValue - inputValue;
-                    break;
-                case '*':
-                    result = previousValue * inputValue;
-                    break;
-                case '/':
-                    if (inputValue === 0) {
-                        alert("0으로 나눌 수 없습니다.");
-                        clearDisplay();
-                        return;
-                    }
-                    result = previousValue / inputValue;
-                    break;
-                default:
-                    return;
-            }
-            // 소수점 처리 (최대 10자리)
-            previousValue = parseFloat(result.toFixed(10));
-        }
-
-        // '=' 버튼 클릭 함수
-        function calculateResult() {
-            if (operator === null || waitingForNewValue) return;
-
-            calculate();
-            currentInput = previousValue.toString();
-            operator = null;
-            previousValue = null;
-            waitingForNewValue = true; // 다음 입력 시 새롭게 시작
-            updateDisplay();
-        }
-
-        // 'AC' (전체 삭제) 버튼 함수
-        function clearDisplay() {
-            currentInput = '0';
-            operator = null;
-            previousValue = null;
-            waitingForNewValue = false;
-            updateDisplay();
-        }
-
-        // 페이지 로드 시 초기 표시
-        updateDisplay(); 
-    </script>
-
-</body>
-</html>
+// 실행: 주사위 데이터와 정답 설명 가져오기
+const currentDice = generateRandomDice();
+const diceFaces = currentDice.faces;
+const currentExplanation = currentDice.explanation;
